@@ -1,9 +1,17 @@
 #include <stdio.h>
 #include <unistd.h>
-#include <time.h>
+#include <sys/time.h>
 #include <cmath>
 
-using std::abs;
+#define MT_PER_SEC (1000000)
+
+typedef unsigned long ulong;
+
+ulong GetTickCount(){
+ struct timeval tv;
+ gettimeofday(&tv,NULL);
+ return ((tv.tv_sec)*1000000 + (tv.tv_usec));
+}
 
 int main(){
   
@@ -15,13 +23,13 @@ int main(){
          "\nВремя для родителя1 и ребёнка1 засекается без выделения динамической памяти.\n\n"
          );
   
-  clock_t t1 = clock();
-  
+  ulong t1 = GetTickCount();
   int pid = fork();
   if(pid){
-    printf("Время до возобновления работы родителя1 %f сек\n", abs(float(clock() - t1))/CLOCKS_PER_SEC);
+    printf("Время до возобновления работы родителя1 %f сек\n", (float(GetTickCount() - t1))/MT_PER_SEC);
+    
   }else{
-    printf("Время до начала работы ребёнка1 \t%f сек\n" , abs(float(clock() - t1))/CLOCKS_PER_SEC);
+    printf("Время до начала работы ребёнка1 \t%f сек\n" , (float(GetTickCount() - t1))/MT_PER_SEC);
   }
   if(!pid)return 0;
   
@@ -35,19 +43,20 @@ int main(){
     p[i]=i;
   }
   
-  t1 = clock();
+  t1 = GetTickCount();
   pid = fork();
   if(pid){
-    printf("Время до возобновления работы родителя2 %f сек\n", abs(float(clock() - t1))/CLOCKS_PER_SEC);
+    printf("Время до возобновления работы родителя2 %f сек\n", (float(GetTickCount() - t1))/MT_PER_SEC);
   }else{
-    printf("Время до начала работы ребёнка2 \t%f сек\n" , abs(float(clock() - t1))/CLOCKS_PER_SEC);
+    printf("Время до начала работы ребёнка2 \t%f сек\n" , (float(GetTickCount() - t1))/MT_PER_SEC);
   }
   delete[] p;
   if(!pid)return 0;
   sleep(5);
   printf("\nКак видно из чисел выше, время работы fork зависит от количества выделенной динамической памяти.\n"
-         "Также существенно отличается время, требуемое для возобновления работы родителя и для начала работы дочерней копии,\n"
-         "причём чем больше памяти используется, тем больше времени пройдёт до начала работы копии.\n\n");
+         "Также отличается время, требуемое для возобновления работы родителя и для начала работы дочерней копии\n"
+         " - для начала работы копии требуется больше времени\n"
+         );
   
   return 0;
 }
