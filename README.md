@@ -1,2 +1,2 @@
-# lab1ee
-First lab for ee
+# EE labs
+All EE labs here
