@@ -11,3 +11,4 @@ main:main.cpp
 
 clean:
 	rm fifofile -f
+	rm fifofile2 -f

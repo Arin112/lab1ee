@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <termios.h>
 
 #include <errno.h>
 
@@ -26,6 +27,29 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 //---
+
+char getch(){
+
+    char buf=0;
+    struct termios old={0};
+    fflush(stdout);
+    if(tcgetattr(0, &old)<0)
+        perror("tcsetattr()");
+    old.c_lflag&=~ICANON;
+    old.c_lflag&=~ECHO;
+    old.c_cc[VMIN]=1;
+    old.c_cc[VTIME]=0;
+    if(tcsetattr(0, TCSANOW, &old)<0)
+        perror("tcsetattr ICANON");
+    if(read(0,&buf,1)<0)
+        perror("read()");
+    old.c_lflag|=ICANON;
+    old.c_lflag|=ECHO;
+    if(tcsetattr(0, TCSADRAIN, &old)<0)
+        perror ("tcsetattr ~ICANON");
+    printf("%c\n",buf);
+    return buf;
+ }
 
 int syncRead(int fd, char* buf, int count){
   int s=0, t;
@@ -73,7 +97,7 @@ int main(int argc, char *argv[]){
   char *array;
   int shmid;
   int n = 1;
-  bool rw;
+  bool rw, rw2;
   const char *pathname = "shMem";
   
   key_t key;
@@ -128,14 +152,47 @@ int main(int argc, char *argv[]){
       return -1;
     }
   }else{
+    //sleep(2);
     if((fd = open("fifofile", O_WRONLY)) == -1){
       cout<<"Can't open fifofile\n";
       shmdt(array);
       return -1;
     }
+    sleep(1);
   }
 
-  if(rw){
+  if(mkfifo("fifofile2", 0777)<0){
+    if(errno == EEXIST){
+      rw2=true;
+      cout<<"Открываю на чтение2, "<<getpid()<<"\n";
+    }else{
+      cout<<"Can't make fifo2:\n";
+      cout<<strerror(errno)<<"\n";
+      shmdt(array);
+      exit(-1);
+    }
+  }else{
+    rw2=false;
+    cout<<"Открываю на запись2, "<<getpid()<<"\n";
+  }
+
+  int fd2;
+  
+  if(rw2){
+    if((fd2 = open("fifofile2", O_RDONLY)) == -1){
+      cout<<"Can't open fifofile2\n";
+      shmdt(array);
+      return -1;
+    }
+  }else{
+    if((fd2 = open("fifofile2", O_WRONLY)) == -1){
+      cout<<"Can't open fifofile2\n";
+      shmdt(array);
+      return -1;
+    }
+  }
+
+  if(!rw){
     for(int i=0;i<size;i++){
       array[i]=0;
     }
@@ -144,38 +201,46 @@ int main(int argc, char *argv[]){
   if(rw){
     
     int offset=0;
-    char sem=0;
+    char sem=0, sem2=1;
     
+    cout<<"reader\n";
+
     for(int i=0;i<N;i++){
-      
-      if((i+1)%2)
-        syncRead(fd, &sem, 1);
+
+      syncRead(fd, &sem, 1);
+      //getch();
       for(;array[offset];offset++);
-      cout<<offset<<"\n";
-      sprintf(array + offset, "pid - %d, time - %s\n", int(getpid()), getTime());
-      if((i)%2)
-        syncRead(fd, &sem, 1);
-      //cout<<getTime()<<"\n";
+      
+      cout<<"writing "<<i<<", pid - "<<int(getpid())<<", offset - "<<offset<<"\n";
+      sprintf(array + offset, "pid - %d, num - %d, time - %s\n", int(getpid()), i, getTime());
+      
+      syncWrite(fd2, &sem2, 1);
+      //cout<<"writer\n";
     }
     
   }else{
   
     int offset=0;
-    char sem=1;
+    char sem=1, sem2=0;
     
+    cout<<"writer\n";
+
     for(int i=0;i<N;i++){
+      //usleep(50000);
+
+      if(i)syncRead(fd2, &sem2, 1);
+      //getch();
       
-      
-      if((i)%2)
-        syncWrite(fd, &sem, 1);
-      //cout<<getTime()<<"\n";
       for(;array[offset];offset++);
-      if(offset==280)offset=0;
-      cout<<offset<<"\n";
-      sprintf(array + offset, "pid - %d, time - %s\n", int(getpid()), getTime());
-      if((i+1)%2)
-        syncWrite(fd, &sem, 1);
       
+      cout<<"writing "<<i<<", pid - "<<int(getpid())<<", offset - "<<offset<<"\n";
+      
+      sprintf(array + offset, "pid - %d, num - %d, time - %s\n", int(getpid()), i, getTime());
+      
+      syncWrite(fd, &sem, 1);
+            
+      
+      //cout<<"reader\n";
     }
 
   }
